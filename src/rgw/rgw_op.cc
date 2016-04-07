@@ -3025,8 +3025,6 @@ void RGWPutObj::execute()
       op_ret = len;
       goto done;
     }
-    if (!len)
-      break;
 
     bufferlist &data = data_in;
     if (s->aws4_auth_streaming_mode) {
