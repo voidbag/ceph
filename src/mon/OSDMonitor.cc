@@ -2176,10 +2176,12 @@ bool OSDMonitor::prepare_boot(MonOpRequestRef op)
 	(g_conf->mon_osd_auto_mark_new_in && (oldstate & CEPH_OSD_NEW)) ||
 	(g_conf->mon_osd_auto_mark_in)) {
       if (can_mark_in(from)) {
-	if (osdmap.osd_xinfo[from].old_weight > 0)
+	if (osdmap.osd_xinfo[from].old_weight > 0) {
 	  pending_inc.new_weight[from] = osdmap.osd_xinfo[from].old_weight;
-	else
+	  pending_inc.new_xinfo[from].old_weight = 0;
+	} else {
 	  pending_inc.new_weight[from] = CEPH_OSD_IN;
+	}
       } else {
 	dout(7) << "prepare_boot NOIN set, will not mark in " << m->get_orig_source_addr() << dendl;
       }
