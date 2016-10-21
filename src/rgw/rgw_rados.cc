@@ -943,7 +943,12 @@ int RGWPeriod::init(CephContext *_cct, RGWRados *_store, bool setup_obj)
 
 
 int RGWPeriod::get_zonegroup(RGWZoneGroup& zonegroup, const string& zonegroup_id) {
-  map<string, RGWZoneGroup>::const_iterator iter = period_map.zonegroups.find(zonegroup_id);
+  map<string, RGWZoneGroup>::const_iterator iter;
+  if (!zonegroup_id.empty()) {
+    iter = period_map.zonegroups.find(zonegroup_id);
+  } else {
+    iter = period_map.zonegroups.find("default");
+  }
   if (iter != period_map.zonegroups.end()) {
     zonegroup = iter->second;
     return 0;
@@ -9373,13 +9378,7 @@ int RGWRados::get_system_obj(RGWObjectCtx& obj_ctx, RGWRados::SystemObject::Read
   uint64_t len;
   ObjectReadOperation op;
 
-  RGWObjState *astate = NULL;
-
   get_obj_bucket_and_oid_loc(obj, bucket, oid, key);
-
-  int r = get_system_obj_state(&obj_ctx, obj, &astate, NULL);
-  if (r < 0)
-    return r;
 
   if (end < 0)
     len = 0;
@@ -9398,7 +9397,7 @@ int RGWRados::get_system_obj(RGWObjectCtx& obj_ctx, RGWRados::SystemObject::Read
   }
 
   librados::IoCtx *io_ctx;
-  r = read_state.get_ioctx(this, obj, &io_ctx);
+  int r = read_state.get_ioctx(this, obj, &io_ctx);
   if (r < 0) {
     ldout(cct, 20) << "get_ioctx() on obj=" << obj << " returned " << r << dendl;
     return r;

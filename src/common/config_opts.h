@@ -1020,8 +1020,6 @@ OPTION(bluestore_wal_max_ops, OPT_U64, 512)
 OPTION(bluestore_wal_max_bytes, OPT_U64, 128*1024*1024)
 OPTION(bluestore_nid_prealloc, OPT_INT, 1024)
 OPTION(bluestore_blobid_prealloc, OPT_U64, 10240)
-OPTION(bluestore_overlay_max_length, OPT_INT, 65536)
-OPTION(bluestore_overlay_max, OPT_INT, 0)
 OPTION(bluestore_clone_cow, OPT_BOOL, true)  // do copy-on-write for clones
 OPTION(bluestore_default_buffered_read, OPT_BOOL, true)
 OPTION(bluestore_default_buffered_write, OPT_BOOL, false)
@@ -1258,11 +1256,7 @@ OPTION(rbd_default_format, OPT_INT, 2)
 OPTION(rbd_default_order, OPT_INT, 22)
 OPTION(rbd_default_stripe_count, OPT_U64, 0) // changing requires stripingv2 feature
 OPTION(rbd_default_stripe_unit, OPT_U64, 0) // changing to non-object size requires stripingv2 feature
-OPTION(rbd_default_features, OPT_INT, 61)   // only applies to format 2 images
-					    // +1 for layering, +2 for stripingv2,
-					    // +4 for exclusive lock, +8 for object map
-					    // +16 for fast-diff, +32 for deep-flatten,
-					    // +64 for journaling, +128 for data pool
+SAFE_OPTION(rbd_default_features, OPT_STR, "layering,exclusive-lock,object-map,fast-diff,deep-flatten")   // only applies to format 2 images
 OPTION(rbd_default_data_pool, OPT_STR, "") // optional default pool for storing image data blocks
 
 OPTION(rbd_default_map_options, OPT_STR, "") // default rbd map -o / --options
@@ -1517,6 +1511,7 @@ OPTION(mgr_module_path, OPT_STR, CEPH_PKGLIBDIR "/mgr") // where to load python 
 OPTION(mgr_modules, OPT_STR, "rest")  // Which modules to load
 OPTION(mgr_data, OPT_STR, "/var/lib/ceph/mgr/$cluster-$id") // where to find keyring etc
 OPTION(mgr_beacon_period, OPT_INT, 5)  // How frequently to send beacon
+OPTION(mon_mgr_digest_period, OPT_INT, 5)  // How frequently to send digests
 OPTION(mon_mgr_beacon_grace, OPT_INT, 30)  // How long to wait to failover
 
 OPTION(rgw_list_bucket_min_readahead, OPT_INT, 1000) // minimum number of entries to read from rados for bucket listing
