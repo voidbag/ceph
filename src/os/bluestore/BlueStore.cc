@@ -710,8 +710,8 @@ void BlueStore::TwoQCache::trim(uint64_t onode_max, uint64_t buffer_max)
 
   // buffers
   if (buffer_bytes > buffer_max) {
-    uint64_t kin = buffer_max / 2;
-    uint64_t khot = kin;
+    uint64_t kin = buffer_max * g_conf->bluestore_2q_cache_kin_ratio;
+    uint64_t khot = buffer_max - kin;
 
     // pre-calculate kout based on average buffer size too,
     // which is typical(the warm_in and hot lists may change later)
@@ -720,7 +720,8 @@ void BlueStore::TwoQCache::trim(uint64_t onode_max, uint64_t buffer_max)
     if (buffer_num) {
       uint64_t buffer_avg_size = buffer_bytes / buffer_num;
       assert(buffer_avg_size);
-      kout = buffer_max / buffer_avg_size;
+      uint64_t caculated_buffer_num = buffer_max / buffer_avg_size;
+      kout = caculated_buffer_num * g_conf->bluestore_2q_cache_kout_ratio;
     }
 
     if (buffer_list_bytes[BUFFER_HOT] < khot) {
@@ -1503,14 +1504,12 @@ bool BlueStore::ExtentMap::update(Onode *o, KeyValueDB::Transaction t,
   if (o->onode.extent_map_shards.empty()) {
     if (inline_bl.length() == 0) {
       unsigned n;
-      if (encode_some(0, OBJECT_MAX_SIZE, inline_bl, &n)) {
-	return true;
-      }
+      bool never_happen = encode_some(0, OBJECT_MAX_SIZE, inline_bl, &n); //we need to encode inline_bl to measure encoded length
+      assert(!never_happen);
       size_t len = inline_bl.length();
       dout(20) << __func__ << " inline shard "
 	       << len << " bytes from " << n << " extents" << dendl;
       if (!force && len > g_conf->bluestore_extent_map_shard_max_size) {
-        inline_bl.clear();
 	return true;
       }
     }
@@ -2260,7 +2259,7 @@ bool BlueStore::ExtentMap::do_write_check_depth(
   bool do_collect = true;
   if (depth < g_conf->bluestore_gc_max_blob_depth) {
     *blob_depth = 1 + depth;
-    do_collect = false;;
+    do_collect = false;
   }
   dout(20) << __func__ << " GC depth " << (int)*blob_depth
            << ", gc 0x" << std::hex << *gc_start_offset << "~"
@@ -3185,7 +3184,7 @@ int BlueStore::_open_db(bool create)
       return -EIO;
     }
   }
-  dout(10) << __func__ << " bluefs = " << bluefs << dendl;
+  dout(10) << __func__ << " do_bluefs = " << do_bluefs << dendl;
 
   rocksdb::Env *env = NULL;
   if (do_bluefs) {
@@ -8185,6 +8184,7 @@ int BlueStore::_do_remove(
     txc->t->rmkey(PREFIX_OBJ, s.key);
   }
   txc->t->rmkey(PREFIX_OBJ, o->key);
+  o->extent_map.clear();
   _debug_obj_on_delete(o->oid);
   return 0;
 }
