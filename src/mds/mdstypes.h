@@ -419,6 +419,9 @@ private:
 public:
   version_t version;
 
+  void free_data() {
+    blp.reset();
+  }
   bufferlist& get_data() {
     if (!blp)
       blp.reset(new bufferlist);
@@ -436,7 +439,7 @@ public:
     if (o.blp)
       *blp.get() = *o.blp.get();
     else
-      blp.release();
+      blp.reset();
     return *this;
   }
   bool operator==(const inline_data_t& o) const {

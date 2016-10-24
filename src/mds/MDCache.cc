@@ -214,7 +214,7 @@ MDCache::MDCache(MDSRank *m) :
 MDCache::~MDCache() 
 {
   if (logger) {
-    g_ceph_context->get_perfcounters_collection()->remove(logger);
+    g_ceph_context->get_perfcounters_collection()->remove(logger.get());
   }
 }
 
@@ -2680,7 +2680,7 @@ void MDCache::resolve_start(MDSInternalContext *resolve_done_)
 {
   dout(10) << "resolve_start" << dendl;
   assert(!resolve_done);
-  resolve_done = resolve_done_;
+  resolve_done.reset(resolve_done_);
 
   if (mds->mdsmap->get_root() != mds->get_nodeid()) {
     // if we don't have the root dir, adjust it to UNKNOWN.  during
@@ -3884,7 +3884,7 @@ void MDCache::rejoin_start(MDSInternalContext *rejoin_done_)
 {
   dout(10) << "rejoin_start" << dendl;
   assert(!rejoin_done);
-  rejoin_done = rejoin_done_;
+  rejoin_done.reset(rejoin_done_);
 
   rejoin_gather = recovery_set;
   // need finish opening cap inodes before sending cache rejoins
@@ -12181,10 +12181,10 @@ void MDCache::register_perfcounters()
     pcb.add_u64_counter(l_mdc_recovery_completed, "recovery_completed",
         "File recoveries completed", "recd");
 
-    logger = pcb.create_perf_counters();
-    g_ceph_context->get_perfcounters_collection()->add(logger);
-    recovery_queue.set_logger(logger);
-    stray_manager.set_logger(logger);
+    logger.reset(pcb.create_perf_counters());
+    g_ceph_context->get_perfcounters_collection()->add(logger.get());
+    recovery_queue.set_logger(logger.get());
+    stray_manager.set_logger(logger.get());
 }
 
 /**
