@@ -112,5 +112,3 @@ To build the documentation, ensure that you are in the top-level
 
 	admin/build-doc
 
-XXXMG: force gitbuilder
-
