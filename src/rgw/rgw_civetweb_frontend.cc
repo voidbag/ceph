@@ -13,7 +13,7 @@
 
 static int civetweb_callback(struct mg_connection* conn)
 {
-  struct mg_request_info* const req_info = mg_get_request_info(conn);
+  const struct mg_request_info* const req_info = mg_get_request_info(conn);
   return static_cast<RGWCivetWebFrontend *>(req_info->user_data)->process(conn);
 }
 
@@ -50,6 +50,8 @@ int RGWCivetWebFrontend::run()
                    std::to_string(g_conf->rgw_thread_pool_size));
   set_conf_default(conf_map, "decode_url", "no");
   set_conf_default(conf_map, "enable_keep_alive", "yes");
+  set_conf_default(conf_map, "validate_http_method", "no");
+  set_conf_default(conf_map, "canonicalize_url_path", "no");
   conf_map["listening_ports"] = conf->get_val("port", "80");
 
   /* Set run_as_user. This will cause civetweb to invoke setuid() and setgid()
