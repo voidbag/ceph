@@ -2999,6 +2999,7 @@ void Locker::_do_snap_update(CInode *in, snapid_t snap, int dirty, snapid_t foll
  */
 void Locker::_update_cap_fields(CInode *in, int dirty, MClientCaps *m, inode_t *pi)
 {
+  uint64_t features = m->get_connection()->get_features();
 
   if (dirty && m->get_ctime() > pi->ctime) {
     dout(7) << "  ctime " << pi->ctime << " -> " << m->get_ctime()
@@ -3006,7 +3007,8 @@ void Locker::_update_cap_fields(CInode *in, int dirty, MClientCaps *m, inode_t *
     pi->ctime = m->get_ctime();
   }
 
-  if (dirty && m->get_change_attr() > pi->change_attr) {
+  if (dirty && (features & CEPH_FEATURE_FS_CHANGE_ATTR) &&
+      m->get_change_attr() > pi->change_attr) {
     dout(7) << "  change_attr " << pi->change_attr << " -> " << m->get_change_attr()
 	    << " for " << *in << dendl;
     pi->change_attr = m->get_change_attr();
@@ -3073,7 +3075,7 @@ void Locker::_update_cap_fields(CInode *in, int dirty, MClientCaps *m, inode_t *
 	      << " for " << *in << dendl;
       pi->mode = m->head.mode;
     }
-    if (m->get_btime() != pi->btime) {
+    if ((features & CEPH_FEATURE_FS_BTIME) && m->get_btime() != pi->btime) {
       dout(7) << "  btime " << oct << pi->btime
 	      << " -> " << m->get_btime() << dec
 	      << " for " << *in << dendl;
