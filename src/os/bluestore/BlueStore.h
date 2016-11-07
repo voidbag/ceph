@@ -1203,6 +1203,7 @@ public:
     bluestore_wal_transaction_t *wal_txn; ///< wal transaction (if any)
     vector<OnodeRef> wal_op_onodes;
 
+    bool is_pipelined_io = false;
     bool kv_submitted = false; ///< true when we've been submitted to kv db
 
     interval_set<uint64_t> allocated, released;
@@ -1321,6 +1322,8 @@ public:
     uint64_t last_seq = 0;
 
     std::atomic_int kv_committing_serially = {0};
+
+    std::atomic_int kv_finisher_submitting = {0};
 
     OpSequencer()
 	//set the qlock to PTHREAD_MUTEX_RECURSIVE mode

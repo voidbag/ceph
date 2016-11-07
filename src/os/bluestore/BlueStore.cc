@@ -6282,6 +6282,7 @@ void BlueStore::_txc_state_proc(TransContext *txc)
     case TransContext::STATE_PREPARE:
       txc->log_state_latency(logger, l_bluestore_state_prepare_lat);
       if (txc->ioc.has_pending_aios()) {
+	txc->is_pipelined_io = true;
 	txc->state = TransContext::STATE_AIO_WAIT;
 	_txc_aio_submit(txc);
 	return;
@@ -6322,11 +6323,19 @@ void BlueStore::_txc_state_proc(TransContext *txc)
 		   << dendl;
 	} else {
 	  _txc_finalize_kv(txc, txc->t);
+	  if (g_conf->bluestore_rtc && !txc->is_pipelined_io) {
+	    if (txc->osr->kv_finisher_submitting == 1) {
+	      db->submit_transaction_sync(txc->t);
+	      _txc_state_proc(txc);
+	      return;
+	    }
+	  }
 	  txc->kv_submitted = true;
 	  int r = db->submit_transaction(txc->t);
 	  assert(r == 0);
 	}
       }
+      txc->is_pipelined_io = true;
       {
 	std::lock_guard<std::mutex> l(kv_lock);
 	kv_queue.push_back(txc);
@@ -6409,6 +6418,7 @@ void BlueStore::_txc_finish_io(TransContext *txc)
     if (p->state < TransContext::STATE_IO_DONE) {
       dout(20) << __func__ << " " << txc << " blocked by " << &*p << " "
 	       << p->get_state_name() << dendl;
+      txc->is_pipelined_io = true;
       return;
     }
     if (p->state > TransContext::STATE_IO_DONE) {
@@ -6525,6 +6535,7 @@ void BlueStore::_txc_finish_kv(TransContext *txc)
     txc->oncommits.pop_front();
   }
 
+  --txc->osr->kv_finisher_submitting;
   throttle_ops.put(txc->ops);
   throttle_bytes.put(txc->bytes);
 }
@@ -6955,6 +6966,7 @@ int BlueStore::queue_transactions(
 
   // prepare
   TransContext *txc = _txc_create(osr);
+  ++txc->osr->kv_finisher_submitting;
   txc->onreadable = onreadable;
   txc->onreadable_sync = onreadable_sync;
   txc->oncommit = ondisk;
