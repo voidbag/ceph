@@ -1166,6 +1166,27 @@ public:
   class OpSequencer;
   typedef boost::intrusive_ptr<OpSequencer> OpSequencerRef;
 
+  class BlueStoreContext : public Context {
+    Context *context;
+    std::atomic_int *counter;
+
+    BlueStoreContext(Context *ctx, std::atomic_int *cnt) {
+      context = ctx;
+      counter = cnt;
+      ++(*counter);
+    }
+
+    void finish(int r) override {
+      if (context != NULL)
+	context->complete(r);
+      --(*counter);
+    }
+  public:
+    static BlueStoreContext *create(Context *ctx, std::atomic_int *cnt) {
+      return new BlueStoreContext(ctx, cnt);
+    }
+  };
+
   struct TransContext {
     typedef enum {
       STATE_PREPARE,
@@ -1353,6 +1374,8 @@ public:
     std::atomic_int kv_committing_serially = {0};
 
     std::atomic_int kv_finisher_submitting = {0};
+    std::atomic_int kv_doing_oncommit = {0};
+    std::atomic_int kv_doing_oncommits = {0};
 
     OpSequencer()
 	//set the qlock to PTHREAD_MUTEX_RECURSIVE mode
@@ -1360,6 +1383,13 @@ public:
     }
     ~OpSequencer() {
       assert(q.empty());
+    }
+
+    bool is_finisher_done(void) {
+      if (kv_doing_oncommit == 1 && kv_doing_oncommits == 0) {
+	return true;
+      }
+      return false;
     }
 
     void queue_new(TransContext *txc) {
@@ -1383,7 +1413,8 @@ public:
       if (txc->state >= TransContext::STATE_KV_DONE) {
 	return true;
       }
-      txc->oncommits.push_back(c);
+      txc->oncommits.push_back(BlueStoreContext::create(c,
+	    &txc->osr->kv_doing_oncommits));
       return false;
     }
 

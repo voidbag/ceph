@@ -6533,18 +6533,35 @@ void BlueStore::_txc_finish_kv(TransContext *txc)
     txc->onreadable_sync = NULL;
   }
   unsigned n = txc->osr->parent->shard_hint.hash_to_shard(m_finisher_num);
-  if (txc->oncommit) {
-    finishers[n]->queue(txc->oncommit);
-    txc->oncommit = NULL;
-  }
-  if (txc->onreadable) {
-    finishers[n]->queue(txc->onreadable);
-    txc->onreadable = NULL;
-  }
-  while (!txc->oncommits.empty()) {
-    auto f = txc->oncommits.front();
-    finishers[n]->queue(f);
-    txc->oncommits.pop_front();
+  if (g_conf->bluestore_rtc_sync_completions && txc->kv_submitted_sync &&
+      txc->osr->is_finisher_done()) {
+    if (txc->oncommit) {
+      txc->oncommit->complete(Context::FLAG_SYNC);
+      txc->oncommit = NULL;
+    }
+    if (txc->onreadable) {
+      finishers[n]->queue(txc->onreadable);
+      txc->onreadable = NULL;
+    }
+    while (!txc->oncommits.empty()) {
+      auto f = txc->oncommits.front();
+      f->complete(Context::FLAG_SYNC);
+      txc->oncommits.pop_front();
+    }
+  } else {
+    if (txc->oncommit) {
+      finishers[n]->queue(txc->oncommit);
+      txc->oncommit = NULL;
+    }
+    if (txc->onreadable) {
+      finishers[n]->queue(txc->onreadable);
+      txc->onreadable = NULL;
+    }
+    while (!txc->oncommits.empty()) {
+      auto f = txc->oncommits.front();
+      finishers[n]->queue(f);
+      txc->oncommits.pop_front();
+    }
   }
 
   --txc->osr->kv_finisher_submitting;
@@ -6977,10 +6994,12 @@ int BlueStore::queue_transactions(
 
   // prepare
   TransContext *txc = _txc_create(osr);
+  std::atomic_int *kv_oncommit;
+  kv_oncommit = &txc->osr->kv_doing_oncommit;
   ++txc->osr->kv_finisher_submitting;
   txc->onreadable = onreadable;
   txc->onreadable_sync = onreadable_sync;
-  txc->oncommit = ondisk;
+  txc->oncommit = BlueStoreContext::create(ondisk, kv_oncommit);
 
   for (vector<Transaction>::iterator p = tls.begin(); p != tls.end(); ++p) {
     (*p).set_osr(osr);

@@ -88,11 +88,13 @@ struct ReplicatedPG::C_OSD_OnApplied : Context {
     epoch_t epoch,
     eversion_t v)
     : pg(pg), epoch(epoch), v(v) {}
-  void finish(int) override {
-    pg->lock();
+  void finish(int r) override {
+    if (r != Context::FLAG_SYNC)
+      pg->lock();
     if (!pg->pg_has_reset_since(epoch))
       pg->op_applied(v);
-    pg->unlock();
+    if (r != Context::FLAG_SYNC)
+      pg->unlock();
   }
 };
 
@@ -152,12 +154,14 @@ public:
   BlessedContext(ReplicatedPG *pg, Context *c, epoch_t e)
     : pg(pg), c(c), e(e) {}
   void finish(int r) {
-    pg->lock();
+    if (r != Context::FLAG_SYNC)
+      pg->lock();
     if (pg->pg_has_reset_since(e))
       delete c;
     else
       c->complete(r);
-    pg->unlock();
+    if (r != Context::FLAG_SYNC)
+      pg->unlock();
   }
 };
 
@@ -2635,16 +2639,19 @@ struct C_ProxyRead : public Context {
   void finish(int r) {
     if (prdop->canceled)
       return;
-    pg->lock();
+    if (r != Context::FLAG_SYNC)
+      pg->lock();
     if (prdop->canceled) {
-      pg->unlock();
+      if (r != Context::FLAG_SYNC)
+        pg->unlock();
       return;
     }
     if (last_peering_reset == pg->get_last_peering_reset()) {
       pg->finish_proxy_read(oid, tid, r);
       pg->osd->logger->tinc(l_osd_tier_r_lat, ceph_clock_now(NULL) - start);
     }
-    pg->unlock();
+    if (r != Context::FLAG_SYNC)
+      pg->unlock();
   }
 };
 
@@ -2830,15 +2837,18 @@ struct C_ProxyWrite_Commit : public Context {
   void finish(int r) {
     if (pwop->canceled)
       return;
-    pg->lock();
+    if (r != Context::FLAG_SYNC)
+      pg->lock();
     if (pwop->canceled) {
-      pg->unlock();
+      if (r != Context::FLAG_SYNC)
+	pg->unlock();
       return;
     }
     if (last_peering_reset == pg->get_last_peering_reset()) {
       pg->finish_proxy_write(oid, tid, r);
     }
-    pg->unlock();
+    if (r != Context::FLAG_SYNC)
+      pg->unlock();
   }
 };
 
@@ -7158,11 +7168,13 @@ struct C_Copyfrom : public Context {
   void finish(int r) {
     if (r == -ECANCELED)
       return;
-    pg->lock();
+    if (r != Context::FLAG_SYNC)
+      pg->lock();
     if (last_peering_reset == pg->get_last_peering_reset()) {
       pg->process_copy_chunk(oid, tid, r);
     }
-    pg->unlock();
+    if (r != Context::FLAG_SYNC)
+      pg->unlock();
   }
 };
 
@@ -8093,12 +8105,14 @@ struct C_Flush : public Context {
   void finish(int r) {
     if (r == -ECANCELED)
       return;
-    pg->lock();
+    if (r != Context::FLAG_SYNC)
+      pg->lock();
     if (last_peering_reset == pg->get_last_peering_reset()) {
       pg->finish_flush(oid, tid, r);
       pg->osd->logger->tinc(l_osd_tier_flush_lat, ceph_clock_now(NULL) - start);
     }
-    pg->unlock();
+    if (r != Context::FLAG_SYNC)
+      pg->unlock();
   }
 };
 
@@ -8912,8 +8926,9 @@ void ReplicatedPG::submit_log_entries(
 	ceph_tid_t rep_tid,
 	epoch_t epoch)
 	: pg(pg), rep_tid(rep_tid), epoch(epoch) {}
-      void finish(int) override {
-	pg->lock();
+      void finish(int r) override {
+	if (r != Context::FLAG_SYNC)
+	  pg->lock();
 	if (!pg->pg_has_reset_since(epoch)) {
 	  auto it = pg->log_entry_update_waiting_on.find(rep_tid);
 	  assert(it != pg->log_entry_update_waiting_on.end());
@@ -8926,7 +8941,8 @@ void ReplicatedPG::submit_log_entries(
 	    pg->log_entry_update_waiting_on.erase(it);
 	  }
 	}
-	pg->unlock();
+	if (r != Context::FLAG_SYNC)
+	  pg->unlock();
       }
     };
     t.register_on_complete(
@@ -8944,11 +8960,13 @@ void ReplicatedPG::submit_log_entries(
 	  : pg(pg),
 	    on_complete(std::move(on_complete)),
 	    epoch(epoch) {}
-	void finish(int) override {
-	  pg->lock();
+	void finish(int r) override {
+	  if (r != Context::FLAG_SYNC)
+	    pg->lock();
 	  if (!pg->pg_has_reset_since(epoch))
 	    on_complete();
-	  pg->unlock();
+	  if (r != Context::FLAG_SYNC)
+	    pg->unlock();
 	}
       };
       t.register_on_complete(
