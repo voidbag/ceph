@@ -6525,14 +6525,27 @@ void BlueStore::_txc_finish_kv(TransContext *txc)
     finishers[n]->queue(txc->onreadable);
     txc->onreadable = NULL;
   }
-  if (txc->oncommit) {
-    finishers[n]->queue(txc->oncommit);
-    txc->oncommit = NULL;
-  }
-  while (!txc->oncommits.empty()) {
-    auto f = txc->oncommits.front();
-    finishers[n]->queue(f);
-    txc->oncommits.pop_front();
+  if (g_conf->bluestore_no_finisher && !txc->is_pipelined_io &&
+      txc->osr->is_finisher_done()) {
+    if (txc->oncommit) {
+      txc->oncommit->complete(Context::HAVE_PGLOCK);
+      txc->oncommit = NULL;
+    }
+    while (!txc->oncommits.empty()) {
+      auto f = txc->oncommits.front();
+      f->complete(Context::HAVE_PGLOCK);
+      txc->oncommits.pop_front();
+    }
+  } else {
+    if (txc->oncommit) {
+      finishers[n]->queue(txc->oncommit);
+      txc->oncommit = NULL;
+    }
+    while (!txc->oncommits.empty()) {
+      auto f = txc->oncommits.front();
+      finishers[n]->queue(f);
+      txc->oncommits.pop_front();
+    }
   }
 
   --txc->osr->kv_finisher_submitting;
@@ -6966,10 +6979,12 @@ int BlueStore::queue_transactions(
 
   // prepare
   TransContext *txc = _txc_create(osr);
+  std::atomic_int *kv_oncommit;
+  kv_oncommit = &txc->osr->kv_doing_oncommit;
   ++txc->osr->kv_finisher_submitting;
   txc->onreadable = onreadable;
   txc->onreadable_sync = onreadable_sync;
-  txc->oncommit = ondisk;
+  txc->oncommit = BlueStoreContext::create(ondisk, kv_oncommit);
 
   for (vector<Transaction>::iterator p = tls.begin(); p != tls.end(); ++p) {
     (*p).set_osr(osr);

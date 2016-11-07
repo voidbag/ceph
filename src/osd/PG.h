@@ -528,12 +528,14 @@ public:
     eversion_t v;
     C_UpdateLastRollbackInfoTrimmedToApplied(PG *pg, epoch_t e, eversion_t v)
       : pg(pg), e(e), v(v) {}
-    void finish(int) {
-      pg->lock();
+    void finish(int r) {
+      if (r != Context::HAVE_PGLOCK)
+	pg->lock();
       if (!pg->pg_has_reset_since(e)) {
 	pg->last_rollback_info_trimmed_to_applied = v;
       }
-      pg->unlock();
+      if (r != Context::HAVE_PGLOCK)
+        pg->unlock();
     }
   };
   // entries <= last_rollback_info_trimmed_to_applied have been trimmed,
@@ -1352,13 +1354,15 @@ public:
     QueuePeeringEvt(PG *pg, epoch_t epoch, EVT evt) :
       pg(pg), epoch(epoch), evt(evt) {}
     void finish(int r) {
-      pg->lock();
+      if (r != Context::HAVE_PGLOCK)
+	pg->lock();
       pg->queue_peering_event(PG::CephPeeringEvtRef(
 				new PG::CephPeeringEvt(
 				  epoch,
 				  epoch,
 				  evt)));
-      pg->unlock();
+      if (r != Context::HAVE_PGLOCK)
+	pg->unlock();
     }
   };
 
