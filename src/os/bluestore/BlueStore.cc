@@ -6323,7 +6323,7 @@ void BlueStore::_txc_state_proc(TransContext *txc)
 		   << dendl;
 	} else {
 	  _txc_finalize_kv(txc, txc->t);
-	  if (g_conf->bluestore_rtc && !txc->is_pipelined_io) {
+	  if (g_conf->bluestore_rtc && !txc->is_pipelined_io && txc->wal_txn) {
 	    if (txc->osr->kv_finisher_submitting == 1) {
 	      db->submit_transaction_sync(txc->t);
 	      _txc_state_proc(txc);
